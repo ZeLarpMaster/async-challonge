@@ -1,7 +1,8 @@
 import aiohttp
 import json
 import functools
-import datetime
+
+import dateutil.parser
 
 
 # TODO: Move into a utilities file
@@ -29,19 +30,22 @@ def flatten_array_params(prefix: str, params: list):
 # TODO: Move into a utilities file
 def response_object_hook(obj):
     for k, v in obj.items():
-        if k.endswith("_at"):
-            try:
-                parsed = datetime.datetime.strptime(v, "%Y-%m-%dT%H:%M:%S%z")
-            except ValueError:
-                pass
-            else:
-                obj[k] = parsed
-        try:
-            parsed = float(v)
-        except TypeError:
-            pass
-        else:
-            obj[k] = parsed
+        if v is not None:
+            if k.endswith("_at"):
+                try:
+                    parsed = dateutil.parser.parse(v)
+                except ValueError:
+                    pass
+                else:
+                    obj[k] = parsed
+            if type(v) == str:
+                try:
+                    parsed = float(v)
+                except (ValueError, TypeError):
+                    pass
+                else:
+                    obj[k] = parsed
+    return obj
 
 # TODO: Move into a utilities file
 response_parser = functools.partial(json.loads, object_hook=response_object_hook)
@@ -78,8 +82,8 @@ class ServerError(ChallongeException):
 
 class Challonge:
     def __init__(self, username, api_key):
-        self.base_url = "https://{user}:{key}@api.challonge.com/v1/{{}}.json".format(user=username, key=api_key)
-        self.session = aiohttp.ClientSession()
+        self.base_url = "https://api.challonge.com/v1/{{}}.json".format(user=username, key=api_key)
+        self.session = aiohttp.ClientSession(auth=aiohttp.BasicAuth(username, api_key))
 
     async def fetch(self, method, endpoint, params=None):
         """Execute an api call and receive its response"""
